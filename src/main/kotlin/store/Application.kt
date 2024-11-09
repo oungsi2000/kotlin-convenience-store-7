@@ -16,6 +16,12 @@ enum class PromotionsColumn {
 	NAME, BUY, GET, START_DATE, END_DATE
 }
 
+data class ReceiptData(
+	val purchasedNormalInfo:List<Map<String,String>>,
+	val purchasedPromotionInfo:List<Map<String,String>>,
+	val totalAmount:Map<String,String>
+)
+
 class InventoryManager(var inventory:MutableList<MutableMap<ProductsColumn, String>> = mutableListOf(mutableMapOf())) {
 	init {
 		checkInventoryType()
@@ -109,8 +115,9 @@ class InventoryManager(var inventory:MutableList<MutableMap<ProductsColumn, Stri
 	}
 
 	companion object {
-		val PRODUCTS_DIR = "src/main/resources/products.md"
-		val PROMOTIONS_DIR = "src/main/resources/promotions.md"
+		const val PRODUCTS_DIR = "src/main/resources/products.md"
+		const val PROMOTION_DIR = "src/main/resources/promotions.md"
+
 	}
 
 	enum class Msg (val msg:String, val isSuccess: Boolean) {
@@ -276,9 +283,148 @@ class PromotionManager (var promotion:MutableList<MutableMap<PromotionsColumn, S
 	}
 }
 
+class MemberShip {
+	companion object {
+		const val MEMBERSHIP_DISCOUNT_RATE = 0.3
+		fun membershipDiscount(buyAmount: Int):Int {
+			var discount =  (buyAmount*MEMBERSHIP_DISCOUNT_RATE).toInt()
+			if (discount > 8000) return 8000
+			return discount
+		}
+	}
+}
+
+class Receipt (private val receiptData:ReceiptData) {
+	var receipt:String = ""
+	fun getPurchasedHistory():String {
+		var data = receiptData.purchasedNormalInfo
+		var stringData = ""
+		for (i in data) {
+			stringData += i["상품명"] +"\t\t"
+			stringData += i["수량"] +"\t"
+			stringData += i["금액"] + "\n"
+		}
+		return stringData
+	}
+
+	fun getPromotionHistory():String {
+		var data = receiptData.purchasedPromotionInfo
+		var stringData = ""
+		for (i in data) {
+			stringData += i["상품명"] +"\t\t"
+			stringData += i["수량"] +"\n"
+		}
+		return stringData
+	}
+
+	fun getTotal():String {
+		var data = receiptData.totalAmount
+		var totalCount = receiptData.purchasedNormalInfo.sumOf {
+			it["수량"]?.toInt()!!
+		}
+		var stringData = ""
+		stringData += "총구매액\t\t${totalCount}\t${data["총구매액"]}\n"
+		stringData += "행사할인\t\t\t${data["행사할인"]}\n"
+		stringData += "멤버십할인\t\t\t${data["멤버십할인"]}\n"
+		stringData += "내실돈\t\t\t    ${data["내실돈"]}\n"
+		return stringData
+	}
+	fun print() {
+		receipt += "==============W 편의점================\n"
+		receipt += "상품명\t\t수량\t금액\n"
+		receipt += getPurchasedHistory()
+		receipt += "=============증\t정===============\n"
+		receipt += getPromotionHistory()
+		receipt += "====================================\n"
+		receipt += getTotal()
+	}
+}
+
 class InputView {
-	fun readItem() {
-	//프로모션 재고의 이름은 내부적으로 상품 이름 + [프로모션] 이 붙게끔 설정합니다
+	companion object {
+		fun readItem():List<List<String>> {
+			println("구매하실 상품명과 수량을 입력해 주세요. (예: [사이다-2],[감자칩-1])")
+			val input = camp.nextstep.edu.missionutils.Console.readLine()
+			var products = input.split(",")
+			products = products.map {
+				it.replace("[", "").replace("]", "")
+			}
+			return products.map { it.split("-")}
+		}
+		fun askBuyPromotionProduct(productName: String, promotionAmount:Int):String {
+			println("현재 ${productName}은(는) ${promotionAmount}개를 무료로 더 받을 수 있습니다. 추가하시겠습니까? (Y/N)")
+			val input = camp.nextstep.edu.missionutils.Console.readLine()
+			return input
+		}
+		fun askBuyWithNoPromotion(productName: String, amount:Int):String {
+			println("현재 ${productName} {$amount}개는 프로모션 할인이 적용되지 않습니다. 그래도 구매하시겠습니까? (Y/N)")
+			val input = camp.nextstep.edu.missionutils.Console.readLine()
+			return input
+		}
+		fun askGetMembershipDiscount():String {
+			println("멤버십 할인을 받으시겠습니까? (Y/N)")
+			val input = camp.nextstep.edu.missionutils.Console.readLine()
+			return input
+		}
+		fun askMoreProducts():String {
+			println("감사합니다. 구매하고 싶은 다른 상품이 있나요? (Y/N)")
+			val input = camp.nextstep.edu.missionutils.Console.readLine()
+			return input
+		}
+	}
+
+}
+
+class OutputView {
+	companion object {
+		fun printProducts(inventoryCSV:String) {
+			println(inventoryCSV)
+		}
+	}
+
+}
+
+class ConvenienceStore {
+	var inventory:MutableList<MutableMap<ProductsColumn, String>>
+	var promotion:MutableList<MutableMap<PromotionsColumn, String>>
+	var inventoryManager:InventoryManager
+	var promotionManager:PromotionManager
+
+	init {
+		inventory = loadInventory()
+		promotion = loadPromotion()
+		inventoryManager = InventoryManager(inventory)
+		promotionManager = PromotionManager(promotion, inventoryManager)
+	}
+
+	fun loadInventory():MutableList<MutableMap<ProductsColumn, String>> {
+		var rawData = Files.lines(Paths.get(InventoryManager.PRODUCTS_DIR)).toList()
+		return rawData.map {
+			var split = it.split(",")
+			mutableMapOf(
+				ProductsColumn.NAME to split[0],
+				ProductsColumn.PRICE to split[1],
+				ProductsColumn.QUANTITY to split[2],
+				ProductsColumn.PROMOTION to split[3]
+			)
+		}.toMutableList().subList(1, rawData.size)
+	}
+	fun loadPromotion():MutableList<MutableMap<PromotionsColumn, String>>  {
+		var rawData = Files.lines(Paths.get(InventoryManager.PROMOTION_DIR)).toList()
+		return rawData.map {
+			var split = it.split(",")
+			mutableMapOf(
+				PromotionsColumn.NAME to split[0],
+				PromotionsColumn.BUY to split[1],
+				PromotionsColumn.GET to split[2],
+				PromotionsColumn.START_DATE to split[3],
+				PromotionsColumn.END_DATE to split[3]
+			)
+		}.toMutableList().subList(1, rawData.size)
+	}
+
+	fun execute() {
+
 	}
 }
 

@@ -393,7 +393,69 @@ class PromotionManagerTest: NsTest() {
         main()
     }
 }
+
+class MemberShipTest {
+    @Test
+    fun `멤버십 회원은 프로모션 미적용 금액의 30%를 할인받는다`() {
+        var discount = MemberShip.membershipDiscount(3000)
+        assertThat(discount).isEqualTo(900)
+    }
+}
+
+class ReceiptTest {
+    @Test
+    fun `영수증은 고객의 구매 내역과 할인을 요약하여 출력한다`() {
+        var data = ReceiptData(
+            listOf(
+                mapOf(
+                    "상품명" to "콜라",
+                    "수량" to "3",
+                    "금액" to "3000"
+                ),
+                mapOf(
+                    "상품명" to "라면",
+                    "수량" to "1",
+                    "금액" to "1500"
+                )
+            ),
+            listOf(
+                mapOf(
+                    "상품명" to "콜라",
+                    "수량" to "1",
+                    "금액" to "1000"
+                ),
+            ),
+            mapOf(
+                "총구매액" to "4500",
+                "행사할인" to "-1000",
+                "멤버십할인" to "0",
+                "내실돈" to "3500"
+            )
+        )
+        var receipt = Receipt(data)
+        receipt.print()
+        assertThat(receipt.receipt).isEqualTo("")
+    }
+}
 class InputViewTest : NsTest() {
+
+    override fun runMain() {
+        main()
+    }
+}
+
+class ConvenienceStoreTest : NsTest() {
+
+    @Test
+    fun `파일 입출력 테스트` () {
+        ConvenienceStore()
+    }
+    override fun runMain() {
+        main()
+    }
+}
+
+class ConvenienceTest : NsTest() {
 
     override fun runMain() {
         main()
