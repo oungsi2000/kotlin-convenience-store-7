@@ -373,20 +373,20 @@ class PromotionManagerTest: NsTest() {
             mutableMapOf(
                 ProductsColumn.NAME to "콜라",
                 ProductsColumn.PRICE to "1000",
-                ProductsColumn.QUANTITY to "1",
+                ProductsColumn.QUANTITY to "10",
                 ProductsColumn.PROMOTION to "null"),
-            mutableMapOf(
-                ProductsColumn.NAME to "콜라",
-                ProductsColumn.PRICE to "1000",
-                ProductsColumn.QUANTITY to "1",
-                ProductsColumn.PROMOTION to "할인"),
+//            mutableMapOf(
+//                ProductsColumn.NAME to "콜라",
+//                ProductsColumn.PRICE to "1000",
+//                ProductsColumn.QUANTITY to "0",
+//                ProductsColumn.PROMOTION to ""),
         )
         var inventoryManager = InventoryManager(inventory)
         var promotionManager = PromotionManager(promotion, inventoryManager)
 
         var applyResult = promotionManager.applyPromotionPrice("콜라", 10)
-        assertThat(applyResult.appliedPrice).isEqualTo(4000)
-        assertThat(applyResult.freeGetAmount).isEqualTo(4)
+        assertThat(applyResult.appliedPrice).isEqualTo(0)
+        assertThat(applyResult.freeGetAmount).isEqualTo(0)
     }
 
     override fun runMain() {

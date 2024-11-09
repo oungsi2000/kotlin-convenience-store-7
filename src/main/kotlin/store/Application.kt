@@ -129,27 +129,27 @@ class PromotionManager (var promotion:MutableList<MutableMap<PromotionsColumn, S
 												var inventoryManager: InventoryManager = InventoryManager()) {
 
 	init {
-		checkPromotionValid()
+		try {
+			promotion.map {
+				checkPromotionValid(it)
+			}
+		} catch (exception: Exception) {
+				throw IllegalArgumentException(Msg.ILLEGAL_TYPE.msg)
+			}
+
 		checkPromotionDuplex()
 	}
 
-	private fun checkPromotionValid() {
-		try {
-			promotion.map {
-				it[PromotionsColumn.BUY]!!.toString()
-				2.toUInt() / it[PromotionsColumn.BUY]?.toUInt()!! //0이 될 수 없습니다
-				2.toUInt() / it[PromotionsColumn.GET]?.toUInt()!! //0이 될 수 없습니다
+	private fun checkPromotionValid(it: MutableMap<PromotionsColumn, String>) {
+		2.toUInt() / it[PromotionsColumn.BUY]?.toUInt()!! //0이 될 수 없습니다
+		2.toUInt() / it[PromotionsColumn.GET]?.toUInt()!! //0이 될 수 없습니다
 
-				val startDate = stringToLocalDate(it[PromotionsColumn.START_DATE]!!)
-				val endDate = stringToLocalDate(it[PromotionsColumn.END_DATE]!!)
+		val startDate = stringToLocalDate(it[PromotionsColumn.START_DATE]!!)
+		val endDate = stringToLocalDate(it[PromotionsColumn.END_DATE]!!)
 
-				//end_date가 start_date보다 빠를 수 없다
-				if (startDate > endDate) {
-					throw IllegalArgumentException(Msg.ILLEGAL_TIME.msg)
-				}
-			}
-		} catch (exception: Exception) {
-			throw IllegalArgumentException(Msg.ILLEGAL_TYPE.msg)
+		//end_date가 start_date보다 빠를 수 없다
+		if (startDate > endDate) {
+			throw IllegalArgumentException(Msg.ILLEGAL_TIME.msg)
 		}
 	}
 
@@ -157,7 +157,6 @@ class PromotionManager (var promotion:MutableList<MutableMap<PromotionsColumn, S
 		var promotionNamesNotDuplex: MutableSet<String?> = mutableSetOf()
 
 		promotion.map { promotionNamesNotDuplex.add(it[PromotionsColumn.NAME]) }
-
 		for (key in promotionNamesNotDuplex) {
 			var matches = promotion.filter { it[PromotionsColumn.NAME] == key }
 			var periods = matches.map {
@@ -165,13 +164,11 @@ class PromotionManager (var promotion:MutableList<MutableMap<PromotionsColumn, S
 				var endDate = stringToLocalDate(it[PromotionsColumn.END_DATE]!!)
 				listOf(startDate, endDate)
 			}
-			if (getIsOverLapped(periods)) {
-				throw IllegalArgumentException(Msg.PERIOD_OVERLAPPED.msg)
+			getIsOverLapped(periods)
 			}
 		}
-	}
 
-	private fun getIsOverLapped(periods:List<List<LocalDate>>):Boolean{
+	private fun getIsOverLapped(periods:List<List<LocalDate>>) {
 		var overlapped:MutableList<Boolean> = mutableListOf()
 		//가능한 모든 순서쌍
 		for (i in 0..<periods.size) {
@@ -179,8 +176,11 @@ class PromotionManager (var promotion:MutableList<MutableMap<PromotionsColumn, S
 				overlapped.add(isOverlapped(periods[i], periods[j]))
 			}
 		}
-		return overlapped.any { it }
+		if (overlapped.any { it } ) {
+			throw IllegalArgumentException(Msg.PERIOD_OVERLAPPED.msg)
+		}
 	}
+
 	private fun isOverlapped(period1:List<LocalDate>, period2:List<LocalDate>):Boolean {
 		return (period1[0] >= period2[0] && period1[0] <= period2[1]) ||
 						(period1[1] >= period2[1] && period1[1] <= period2[1]) ||
@@ -205,74 +205,64 @@ class PromotionManager (var promotion:MutableList<MutableMap<PromotionsColumn, S
 	private fun assignBuyAmount (buyAmount:Int, promotionBuy:Int, promotionGet:Int, productStock:Int):List<Int> {
 		var normalProductBuyAmount:Int = 0
 		var orderedPromotionBuyAmount:Int = 0
-		var appliedPromotionBuyAmount:Int = 0
-
 		while (normalProductBuyAmount + orderedPromotionBuyAmount <= buyAmount) {
 			normalProductBuyAmount += 1
-
-			if (normalProductBuyAmount + orderedPromotionBuyAmount >= buyAmount) {
-				break
-			}
-
-			if (normalProductBuyAmount % promotionBuy == 0) {
-				orderedPromotionBuyAmount += promotionGet
-			}
+			if (normalProductBuyAmount + orderedPromotionBuyAmount >= buyAmount) break
+			if (normalProductBuyAmount % promotionBuy == 0) orderedPromotionBuyAmount += promotionGet
 		}
+		return assignOrderedToApplied(normalProductBuyAmount, orderedPromotionBuyAmount, productStock)
+	}
 
-		appliedPromotionBuyAmount = orderedPromotionBuyAmount
+	private fun assignOrderedToApplied (normalProductBuyAmount:Int, orderedPromotionBuyAmount:Int, productStock: Int):List<Int> {
+		var appliedPromotionBuyAmount = orderedPromotionBuyAmount
 		if (orderedPromotionBuyAmount > productStock) {
 			appliedPromotionBuyAmount = productStock
 		}
 		return listOf<Int>(normalProductBuyAmount, orderedPromotionBuyAmount, appliedPromotionBuyAmount)
 	}
 
-	fun applyPromotionPrice(productName:String, buyAmount:Int):ApplyResult {
+	private fun getPromotionInfo(productName:String, buyAmount: Int):PromotionInfo {
 		var promotionProductInfo = inventoryManager.searchPromotionProduct(productName)
-		if (promotionProductInfo.isEmpty()) {
-			return ApplyResult(false, 0, 0)
-		}
-		var productStock = promotionProductInfo[0][ProductsColumn.QUANTITY]?.toInt()!!
-		var productPrice = promotionProductInfo[0][ProductsColumn.PRICE]?.toInt()!!
+		var currentProductPromotion = getValidPromotions().filter { it[PromotionsColumn.NAME] == promotionProductInfo[0][ProductsColumn.PROMOTION]}
 
-		var validPromotions = getValidPromotions()
-		var currentProductPromotion = validPromotions.filter { it[PromotionsColumn.NAME] == promotionProductInfo[0][ProductsColumn.PROMOTION]}
-		var isNotOnPromotion = currentProductPromotion.isEmpty()
-
-		//프로모션이 없을 경우
-		if (isNotOnPromotion) {
-			return ApplyResult(false, 0, 0)
-		}
-
-		var promotionBuy = currentProductPromotion[0][PromotionsColumn.BUY]?.toInt()!!
-		var promotionGet = currentProductPromotion[0][PromotionsColumn.GET]?.toInt()!!
-
-		//일반 재고, 예상 프로모션 적용 재고, 실제 프로모션 적용 재고 변수
-		var assigned = assignBuyAmount(buyAmount, promotionBuy, promotionGet, productStock)
-		var normalProductBuyAmount = assigned[0]
-		var orderedPromotionBuyAmount = assigned[1]
-		var appliedPromotionBuyAmount = assigned[2]
-
-		//프로모션 재고가 없을 경우
-		if (productStock <= 0) {
-			return ApplyResult(false, 0, 0)
-		}
-
-		//프로모션 재고가 떨어졌을 때 정가로 안내 및 책정 (정가결제)
-		if (orderedPromotionBuyAmount > appliedPromotionBuyAmount) {
-			//정가로 안내 및 책정
-		}
-
-		//해당 수량보다 적게 가져온 경우 안내
-		if (buyAmount % (promotionBuy+promotionGet) != 0) {
-			//프로모션 안내
-			var requiredAdditionalAmount = promotionBuy+promotionGet - (buyAmount % (promotionBuy+promotionGet))
-			return applyPromotionPrice(productName, requiredAdditionalAmount+buyAmount)
-		}
-
-		//프로모션 적용 금액과 적용 안된 금액을 반환한다
-		return ApplyResult(true, productPrice*appliedPromotionBuyAmount, appliedPromotionBuyAmount)
+		return PromotionInfo(
+			promotionProductInfo[0][ProductsColumn.QUANTITY]?.toInt()!!,
+			promotionProductInfo[0][ProductsColumn.PRICE]?.toInt()!!,
+			currentProductPromotion[0][PromotionsColumn.BUY]?.toInt()!!,
+			currentProductPromotion[0][PromotionsColumn.GET]?.toInt()!!,
+		)
 	}
 
+	private fun checkAvailableGetPromo (productName:String): Boolean{
+		var promotionProductInfo = inventoryManager.searchPromotionProduct(productName)
+		if (promotionProductInfo.isEmpty()) return false
+		var currentProductPromotion = getValidPromotions().filter { it[PromotionsColumn.NAME] == promotionProductInfo[0][ProductsColumn.PROMOTION]}
+		if (currentProductPromotion.isEmpty()) return false
+		return true
+	}
+
+	fun applyPromotionPrice(productName:String, buyAmount:Int):ApplyResult {
+		if (!checkAvailableGetPromo(productName)) return ApplyResult(false, 0, 0)
+		var promotionProductInfo = inventoryManager.searchPromotionProduct(productName)
+		var currentProductPromotion = getValidPromotions().filter { it[PromotionsColumn.NAME] == promotionProductInfo[0][ProductsColumn.PROMOTION]}
+		var promoInfo = getPromotionInfo(productName, buyAmount)
+		var assigned = assignBuyAmount(buyAmount, promoInfo.promotionBuy, promoInfo.promotionGet, promoInfo.productStock)
+
+		if (currentProductPromotion.isEmpty()) return ApplyResult(false, 0, 0) //프로모션 재고가 떨어졌을 때 정가로 안내 및 책정 (정가결제)
+		if (assigned[1] > assigned[2]) { /*정가로 안내 및 책정 */ }
+		if (buyAmount % (promoInfo.promotionBuy+promoInfo.promotionGet) != 0) {
+			var requiredAdditionalAmount = promoInfo.promotionBuy+promoInfo.promotionGet - (buyAmount % (promoInfo.promotionBuy+promoInfo.promotionGet)) //프로모션 안내
+			return applyPromotionPrice(productName, requiredAdditionalAmount+buyAmount)
+		}
+		return ApplyResult(true, promoInfo.productPrice* assigned[2],  assigned[2])
+	}
+
+	data class PromotionInfo (
+		val productStock:Int,
+		val productPrice:Int,
+		val promotionBuy:Int,
+		val promotionGet:Int,
+	)
 	data class ApplyResult(
 		val result: Boolean,
 		val appliedPrice: Int,
