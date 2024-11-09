@@ -246,6 +246,153 @@ class InventoryClassTest : NsTest() {
     }
 }
 
+class PromotionManagerTest: NsTest() {
+    @Test
+    fun `해당 타입과 일치하지 않을 시, IllegalArgumentException을 반환한다`() {
+        var promotion = mutableListOf(
+            mutableMapOf(
+                PromotionsColumn.NAME to "할인",
+                PromotionsColumn.BUY to "2",
+                PromotionsColumn.GET to "1",
+                PromotionsColumn.START_DATE to "202-01-12",
+                PromotionsColumn.END_DATE to "2023-12-31",
+            ),
+        )
+        assertThatThrownBy {
+            var promotionManager = PromotionManager(promotion)
+        }
+    }
+
+    @Test
+    fun `end_date가 start_date보다 빠를 수 없다`() {
+        var promotion = mutableListOf(
+            mutableMapOf(
+                PromotionsColumn.NAME to "할인",
+                PromotionsColumn.BUY to "2",
+                PromotionsColumn.GET to "1",
+                PromotionsColumn.START_DATE to "2024-01-12",
+                PromotionsColumn.END_DATE to "2021-12-31",
+            ),
+        )
+        assertThatThrownBy {
+            var promotionManager = PromotionManager(promotion)
+        }
+    }
+
+    @Test
+    fun `buy와 get은 0 이상이어야 한다`() {
+        var promotion = mutableListOf(
+            mutableMapOf(
+                PromotionsColumn.NAME to "할인",
+                PromotionsColumn.BUY to "0",
+                PromotionsColumn.GET to "0",
+                PromotionsColumn.START_DATE to "2024-01-12",
+                PromotionsColumn.END_DATE to "2021-12-31",
+            ),
+        )
+        assertThatThrownBy {
+            var promotionManager = PromotionManager(promotion)
+        }
+    }
+
+    @Test
+    fun `같은 프로모션의 경우 서로 기간이 겹칠 수 없다`() {
+        var promotion = mutableListOf(
+            mutableMapOf(
+                PromotionsColumn.NAME to "할인",
+                PromotionsColumn.BUY to "2",
+                PromotionsColumn.GET to "1",
+                PromotionsColumn.START_DATE to "2024-01-12",
+                PromotionsColumn.END_DATE to "2024-12-31",
+            ),
+            mutableMapOf(
+                PromotionsColumn.NAME to "할인",
+                PromotionsColumn.BUY to "2",
+                PromotionsColumn.GET to "1",
+                PromotionsColumn.START_DATE to "2024-04-12",
+                PromotionsColumn.END_DATE to "2026-12-31",
+            ),
+            mutableMapOf(
+                PromotionsColumn.NAME to "할인",
+                PromotionsColumn.BUY to "2",
+                PromotionsColumn.GET to "1",
+                PromotionsColumn.START_DATE to "2025-04-12",
+                PromotionsColumn.END_DATE to "2026-12-31",
+            ),
+        )
+        assertThatThrownBy {
+            var promotionManager = PromotionManager(promotion)
+        }
+    }
+
+    @Test
+    fun `오늘 날짜가 프로모션 기간 내에 포함된 경우에만 할인을 적용한다`() {
+        var promotion = mutableListOf(
+            mutableMapOf(
+                PromotionsColumn.NAME to "할인",
+                PromotionsColumn.BUY to "2",
+                PromotionsColumn.GET to "1",
+                PromotionsColumn.START_DATE to "2024-01-12",
+                PromotionsColumn.END_DATE to "2024-12-31",
+            ),
+            mutableMapOf(
+                PromotionsColumn.NAME to "할인2",
+                PromotionsColumn.BUY to "2",
+                PromotionsColumn.GET to "1",
+                PromotionsColumn.START_DATE to "2025-01-12",
+                PromotionsColumn.END_DATE to "2026-12-31",
+            ),
+        )
+
+        var promotionManager = PromotionManager(promotion)
+        var validPromotions = promotionManager.getValidPromotions()
+        assertThat(validPromotions).isEqualTo(mutableListOf(
+            mutableMapOf(
+            PromotionsColumn.NAME to "할인",
+            PromotionsColumn.BUY to "2",
+            PromotionsColumn.GET to "1",
+            PromotionsColumn.START_DATE to "2024-01-12",
+            PromotionsColumn.END_DATE to "2021-12-31",
+        ),
+            )
+        )
+    }
+
+    @Test
+    fun `1+1 또는 2+1 프로모션이 각각 지정된 상품에 적용된다`() {
+        var promotion = mutableListOf(
+            mutableMapOf(
+                PromotionsColumn.NAME to "할인",
+                PromotionsColumn.BUY to "2",
+                PromotionsColumn.GET to "1",
+                PromotionsColumn.START_DATE to "2024-01-12",
+                PromotionsColumn.END_DATE to "2025-12-31",
+            ),
+        )
+        var inventory = mutableListOf(
+            mutableMapOf(
+                ProductsColumn.NAME to "콜라",
+                ProductsColumn.PRICE to "1000",
+                ProductsColumn.QUANTITY to "1",
+                ProductsColumn.PROMOTION to "null"),
+            mutableMapOf(
+                ProductsColumn.NAME to "콜라",
+                ProductsColumn.PRICE to "1000",
+                ProductsColumn.QUANTITY to "1",
+                ProductsColumn.PROMOTION to "할인"),
+        )
+        var inventoryManager = InventoryManager(inventory)
+        var promotionManager = PromotionManager(promotion, inventoryManager)
+
+        var applyResult = promotionManager.applyPromotionPrice("콜라", 10)
+        assertThat(applyResult.appliedPrice).isEqualTo(4000)
+        assertThat(applyResult.freeGetAmount).isEqualTo(4)
+    }
+
+    override fun runMain() {
+        main()
+    }
+}
 class InputViewTest : NsTest() {
 
     override fun runMain() {
