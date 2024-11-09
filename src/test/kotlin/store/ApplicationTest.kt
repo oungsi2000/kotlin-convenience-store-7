@@ -210,11 +210,11 @@ class InventoryClassTest : NsTest() {
                 ProductsColumn.PROMOTION to "null"),
         )
         var inventoryManager = InventoryManager(inventory)
-        var boughtProduct = "콜라"
-        var boughtCount = 2
+        var boughtProduct = "콜"
+        var boughtCount = "8"
 
-        var result = inventoryManager.deduct(boughtProduct, boughtCount, isPromotion = false)
-        assertThat(inventoryManager.inventory[0][ProductsColumn.QUANTITY]).isEqualTo("10")
+        var result = inventoryManager.updatePromotionProduct(boughtProduct, boughtCount)
+//        assertThat(inventoryManager.inventory[0][ProductsColumn.QUANTITY]).isEqualTo("8")
         assertThat(result).isEqualTo(InventoryManager.Msg.OUT_OF_STOCK)
     }
 

@@ -1,6 +1,5 @@
 package store
 
-import store.InventoryManager.Msg
 import java.nio.file.Paths
 import java.nio.file.Files
 import java.time.LocalDate
@@ -38,7 +37,6 @@ class InventoryManager(var inventory:MutableList<MutableMap<ProductsColumn, Stri
 
 	private fun checkInventoryDuplex() {
 		var productNamesNotDuplex: MutableSet<String?> = mutableSetOf()
-
 		inventory.map { productNamesNotDuplex.add(it[ProductsColumn.NAME]) }
 
 		for (key in productNamesNotDuplex) {
@@ -54,7 +52,6 @@ class InventoryManager(var inventory:MutableList<MutableMap<ProductsColumn, Stri
 
 	fun checkProductAvailable(targetProduct:String):Boolean {
 		var isNormalProductAvailable = false
-
 		for (productInfo in inventory) {
 			var productName = productInfo[ProductsColumn.NAME]
 			var productStock = productInfo[ProductsColumn.QUANTITY]
@@ -66,36 +63,7 @@ class InventoryManager(var inventory:MutableList<MutableMap<ProductsColumn, Stri
 		return isNormalProductAvailable
 	}
 
-
-	fun deduct(boughtProduct:String, boughtAmount:Int, isPromotion:Boolean=false):Msg {
-		var productInfo = inventory.withIndex().filter {
-			it.value[ProductsColumn.NAME] == boughtProduct && it.value[ProductsColumn.PROMOTION] == "null"
-		}
-
-		if (isPromotion) {
-			productInfo = inventory.withIndex().filter {
-				it.value[ProductsColumn.NAME] == boughtProduct && it.value[ProductsColumn.PROMOTION] != "null"
-			}
-		}
-
-		if (productInfo.isEmpty()) {
-			return Msg.PRODUCT_NOT_FOUND
-		}
-
-		var index = productInfo[0].index
-		var productStock = productInfo[0].value[ProductsColumn.QUANTITY]?.toInt()!!
-		var currentStock = productStock - boughtAmount
-
-		if (currentStock < 0 ) {
-			return Msg.OUT_OF_STOCK
-		}
-
-		inventory[index][ProductsColumn.QUANTITY] = currentStock.toString()
-
-		return Msg.SUCCESS
-	}
-
-	 fun inventoryToCSV():String {
+	fun inventoryToCSV():String {
 		var inventoryCSV = "name,price,quantity,promotion\n"
 		for (productInfo in inventory) {
 			var text = productInfo.values.toList().joinToString(",") + "\n"
@@ -110,14 +78,34 @@ class InventoryManager(var inventory:MutableList<MutableMap<ProductsColumn, Stri
 	}
 
 	//상품 이름으로 재고를 검색하여 재고 정보를 반환합니다
-	fun searchNormalProduct(productName:String):Map<ProductsColumn, String> {
+	fun searchNormalProduct(productName:String):List<Map<ProductsColumn, String>> {
 		var searchResult = inventory.filter { it[ProductsColumn.NAME] == productName.trim() && it[ProductsColumn.PROMOTION] == "null"}
-		return searchResult[0]
+		return searchResult
 	}
 
-	fun searchPromotionProduct(productName:String):Map<ProductsColumn, String> {
+	fun searchPromotionProduct(productName:String):List<Map<ProductsColumn, String>> {
 		var searchResult = inventory.filter { it[ProductsColumn.NAME] == productName.trim() && it[ProductsColumn.PROMOTION] != "null"}
-		return searchResult[0]
+		return searchResult
+	}
+
+	fun updateNormalProduct(productName: String, updateStock:String):Msg {
+		inventory.forEachIndexed { index, value ->
+			if (value[ProductsColumn.NAME] == productName.trim() && value[ProductsColumn.PROMOTION] == "null") {
+				inventory[index][ProductsColumn.QUANTITY] = updateStock
+				return Msg.SUCCESS
+			}
+		}
+		return Msg.PRODUCT_NOT_FOUND
+	}
+
+	fun updatePromotionProduct(productName: String, updateStock:String):Msg {
+		inventory.forEachIndexed { index, value ->
+			if (value[ProductsColumn.NAME] == productName.trim() && value[ProductsColumn.PROMOTION] != "null") {
+				inventory[index][ProductsColumn.QUANTITY] = updateStock
+				return Msg.SUCCESS
+			}
+		}
+		return Msg.PRODUCT_NOT_FOUND
 	}
 
 	companion object {
@@ -138,8 +126,7 @@ class InventoryManager(var inventory:MutableList<MutableMap<ProductsColumn, Stri
 }
 
 class PromotionManager (var promotion:MutableList<MutableMap<PromotionsColumn, String>>,
-												var inventoryManager: InventoryManager = InventoryManager()
-) {
+												var inventoryManager: InventoryManager = InventoryManager()) {
 
 	init {
 		checkPromotionValid()
@@ -241,11 +228,14 @@ class PromotionManager (var promotion:MutableList<MutableMap<PromotionsColumn, S
 
 	fun applyPromotionPrice(productName:String, buyAmount:Int):ApplyResult {
 		var promotionProductInfo = inventoryManager.searchPromotionProduct(productName)
-		var productStock = promotionProductInfo[ProductsColumn.QUANTITY]?.toInt()!!
-		var productPrice = promotionProductInfo[ProductsColumn.PRICE]?.toInt()!!
+		if (promotionProductInfo.isEmpty()) {
+			return ApplyResult(false, 0, 0)
+		}
+		var productStock = promotionProductInfo[0][ProductsColumn.QUANTITY]?.toInt()!!
+		var productPrice = promotionProductInfo[0][ProductsColumn.PRICE]?.toInt()!!
 
 		var validPromotions = getValidPromotions()
-		var currentProductPromotion = validPromotions.filter { it[PromotionsColumn.NAME] == promotionProductInfo[ProductsColumn.PROMOTION]}
+		var currentProductPromotion = validPromotions.filter { it[PromotionsColumn.NAME] == promotionProductInfo[0][ProductsColumn.PROMOTION]}
 		var isNotOnPromotion = currentProductPromotion.isEmpty()
 
 		//프로모션이 없을 경우
