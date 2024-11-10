@@ -193,7 +193,7 @@ class InventoryClassTest : NsTest() {
             )
         var inventoryManager = InventoryManager(inventory)
         var product = "콜라"
-        var isBuyable:Boolean = inventoryManager.checkProductAvailable(product)
+        var isBuyable:Boolean = inventoryManager.checkProductAvailable(product, 5)
         assertThat(isBuyable).isFalse()
     }
 
@@ -441,12 +441,6 @@ class ReceiptTest {
         var receipt = Receipt(data)
         receipt.createReceipt()
         assertThat(receipt.receipt).isEqualTo("")
-    }
-}
-class InputViewTest : NsTest() {
-
-    override fun runMain() {
-        main()
     }
 }
 

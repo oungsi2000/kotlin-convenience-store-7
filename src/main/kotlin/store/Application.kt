@@ -67,17 +67,15 @@ class InventoryManager(var inventory:MutableList<MutableMap<ProductsColumn, Stri
 		}
 	}
 
-	fun checkProductAvailable(targetProduct:String):Boolean {
-		var isNormalProductAvailable = false
-		for (productInfo in inventory) {
-			var productName = productInfo[ProductsColumn.NAME]
-			var productStock = productInfo[ProductsColumn.QUANTITY]
+	fun checkProductAvailable(targetProduct:String, buyAmount: Int):Boolean {
+		var productInfo = searchNormalProduct(targetProduct)[0]
+		var promotionProductInfo = searchPromotionProduct(targetProduct)[0]
+		var normalStock = productInfo[ProductsColumn.QUANTITY]?.toInt()!!
+		var promotionStock = promotionProductInfo[ProductsColumn.QUANTITY]?.toInt()!!
 
-			if (productName == targetProduct && productInfo[ProductsColumn.PROMOTION] == "null") {
-				isNormalProductAvailable = productStock?.toInt()!! > 0
-			}
-		}
-		return isNormalProductAvailable
+		if(normalStock + promotionStock < buyAmount) return false
+		if(normalStock <= 0) return false
+		return true
 	}
 
 	fun inventoryToCSV():String {
@@ -485,15 +483,18 @@ class ConvenienceStore {
 	fun execute() {
 		OutputView.printWelcome()
 		OutputView.printProducts(inventoryManager.inventoryToCSV())
-		var input = InputView.readItem()
-		var results = input.map {
+		var inputs = InputView.readItem()
+
+		for (it in inputs)	{
 			var productName = it[0]
 			var buyAmount = it[1].toInt()
-			var isAvailable = inventoryManager.checkProductAvailable(productName)
 
-			if(!isAvailable) {/*재입력 받기*/}
 			var productInfo = inventoryManager.searchNormalProduct(productName)
 			var promotionInfo = inventoryManager.searchPromotionProduct(productName)
+			if (productInfo.isEmpty()) {}
+
+			var isAvailable = inventoryManager.checkProductAvailable(productName, buyAmount) //재고 수량 또한 입력을 받아서 가능한지 여부
+			if(!isAvailable) {/*재입력 받기*/}
 
 			if (productInfo[0][ProductsColumn.QUANTITY]?.toInt()!! + promotionInfo[0][ProductsColumn.QUANTITY]?.toInt()!!< buyAmount ) {/*재고수량 초과, 재입력*/}
 			var result = promotionManager.applyPromotionPrice(productName, buyAmount)
