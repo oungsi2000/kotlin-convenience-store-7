@@ -7,11 +7,11 @@ import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertDoesNotThrow
-import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
-import org.junit.jupiter.params.provider.MethodSource
+import java.io.ByteArrayInputStream
 import java.time.LocalDate
+
 
 class ApplicationTest : NsTest() {
     @Test
@@ -360,6 +360,10 @@ class PromotionManagerTest: NsTest() {
 
     @Test
     fun `1+1 또는 2+1 프로모션이 각각 지정된 상품에 적용된다`() {
+        val input = System.`in`
+        val `in` = ByteArrayInputStream("Y".toByteArray())
+        System.setIn(`in`)
+
         var promotion = mutableListOf(
             mutableMapOf(
                 PromotionsColumn.NAME to "할인",
@@ -375,18 +379,20 @@ class PromotionManagerTest: NsTest() {
                 ProductsColumn.PRICE to "1000",
                 ProductsColumn.QUANTITY to "10",
                 ProductsColumn.PROMOTION to "null"),
-//            mutableMapOf(
-//                ProductsColumn.NAME to "콜라",
-//                ProductsColumn.PRICE to "1000",
-//                ProductsColumn.QUANTITY to "0",
-//                ProductsColumn.PROMOTION to ""),
+            mutableMapOf(
+                ProductsColumn.NAME to "콜라",
+                ProductsColumn.PRICE to "1000",
+                ProductsColumn.QUANTITY to "10",
+                ProductsColumn.PROMOTION to "할인"),
         )
         var inventoryManager = InventoryManager(inventory)
         var promotionManager = PromotionManager(promotion, inventoryManager)
 
-        var applyResult = promotionManager.applyPromotionPrice("콜라", 10)
-        assertThat(applyResult.appliedPrice).isEqualTo(0)
-        assertThat(applyResult.freeGetAmount).isEqualTo(0)
+        var applyResult = promotionManager.applyPromotionPrice("콜라", 5)
+        assertThat(applyResult.appliedPrice).isEqualTo(2000)
+        assertThat(applyResult.freeGetAmount).isEqualTo(2)
+        assertThat(applyResult.amountDifference).isEqualTo(0)
+
     }
 
     override fun runMain() {

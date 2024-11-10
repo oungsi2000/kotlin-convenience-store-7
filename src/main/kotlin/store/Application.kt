@@ -1,5 +1,6 @@
 package store
 
+import org.assertj.core.internal.DeepDifference.Difference
 import java.nio.file.Paths
 import java.nio.file.Files
 import java.time.LocalDate
@@ -248,32 +249,57 @@ class PromotionManager (var promotion:MutableList<MutableMap<PromotionsColumn, S
 		return true
 	}
 
+	private fun notifyPromotionNotApplied (productName: String, promoInfo:PromotionInfo, expect:Int, real:Int):ApplyResult {
+		var notValidStock = expect - real
+		var input = InputView.askBuyWithNoPromotion(productName, notValidStock)
+		if (input == "Y") {
+			return ApplyResult(true, promoInfo.Price* real, real, notValidStock*(promoInfo.Buy+promoInfo.Get))
+		}
+		return ApplyResult(true, promoInfo.Price* real,  real)
+	}
+
+	private fun notifyExistPromotion (productName: String, buyAmount: Int, promoInfo: PromotionInfo, expect: Int, real: Int):ApplyResult {
+		var requiredAdditionalAmount = promoInfo.Buy + promoInfo.Get - (buyAmount % (promoInfo.Buy + promoInfo.Get))
+		var input = InputView.askBuyPromotionProduct(productName, requiredAdditionalAmount)
+		if (input == "Y") {
+			var result = applyPromotionPrice(productName, requiredAdditionalAmount + buyAmount)
+			result.amountDifference = requiredAdditionalAmount
+			return result
+		}
+		return ApplyResult(true, promoInfo.Price* real,  real)
+
+	}
+
 	fun applyPromotionPrice(productName:String, buyAmount:Int):ApplyResult {
 		if (!checkAvailableGetPromo(productName)) return ApplyResult(false, 0, 0)
 		var promotionProductInfo = inventoryManager.searchPromotionProduct(productName)
 		var currentProductPromotion = getValidPromotions().filter { it[PromotionsColumn.NAME] == promotionProductInfo[0][ProductsColumn.PROMOTION]}
 		var promoInfo = getPromotionInfo(productName, buyAmount)
-		var assigned = assignBuyAmount(buyAmount, promoInfo.promotionBuy, promoInfo.promotionGet, promoInfo.productStock)
+		var assigned = assignBuyAmount(buyAmount, promoInfo.Buy, promoInfo.Get, promoInfo.Stock)
 
-		if (currentProductPromotion.isEmpty()) return ApplyResult(false, 0, 0) //프로모션 재고가 떨어졌을 때 정가로 안내 및 책정 (정가결제)
-		if (assigned[1] > assigned[2]) { /*정가로 안내 및 책정 */ }
-		if (buyAmount % (promoInfo.promotionBuy+promoInfo.promotionGet) != 0) {
-			var requiredAdditionalAmount = promoInfo.promotionBuy+promoInfo.promotionGet - (buyAmount % (promoInfo.promotionBuy+promoInfo.promotionGet)) //프로모션 안내
-			return applyPromotionPrice(productName, requiredAdditionalAmount+buyAmount)
+		if (currentProductPromotion.isEmpty()) return ApplyResult(false, 0, 0)
+		if (assigned[1] > assigned[2]) {
+			/*정가로 안내 및 책정 */
+			return notifyPromotionNotApplied(productName, promoInfo, assigned[1],  assigned[2])
 		}
-		return ApplyResult(true, promoInfo.productPrice* assigned[2],  assigned[2])
+		if (buyAmount % (promoInfo.Buy+promoInfo.Get) != 0) {
+			//프로모션 존재 안내 및 적용
+			return notifyExistPromotion(productName, buyAmount, promoInfo, assigned[1], assigned[2])
+		}
+		return ApplyResult(true, promoInfo.Price* assigned[2],  assigned[2])
 	}
 
 	data class PromotionInfo (
-		val productStock:Int,
-		val productPrice:Int,
-		val promotionBuy:Int,
-		val promotionGet:Int,
+		val Stock:Int,
+		val Price:Int,
+		val Buy:Int,
+		val Get:Int,
 	)
 	data class ApplyResult(
 		val result: Boolean,
 		val appliedPrice: Int,
-		val freeGetAmount:Int
+		val freeGetAmount:Int,
+		var amountDifference:Int = 0
 	)
 
 	enum class Msg(val msg:String, val isSuccess: Boolean) {
@@ -357,7 +383,7 @@ class InputView {
 			return input
 		}
 		fun askBuyWithNoPromotion(productName: String, amount:Int):String {
-			println("현재 ${productName} {$amount}개는 프로모션 할인이 적용되지 않습니다. 그래도 구매하시겠습니까? (Y/N)")
+			println("현재 ${productName} ${amount}개는 프로모션 할인이 적용되지 않습니다. 그래도 구매하시겠습니까? (Y/N)")
 			val input = camp.nextstep.edu.missionutils.Console.readLine()
 			return input
 		}
@@ -379,6 +405,10 @@ class OutputView {
 	companion object {
 		fun printProducts(inventoryCSV:String) {
 			println(inventoryCSV)
+		}
+		fun printWelcome() {
+			println("안녕하세요. W편의점입니다.\n" +
+							"현재 보유하고 있는 상품입니다.")
 		}
 	}
 
@@ -424,11 +454,28 @@ class ConvenienceStore {
 	}
 
 	fun execute() {
+		OutputView.printWelcome()
+		OutputView.printProducts(inventoryManager.inventoryToCSV())
+		var input = InputView.readItem()
+		var results = input.map {
+			var productName = it[0]
+			var buyAmount = it[1].toInt()
+			var isAvailable = inventoryManager.checkProductAvailable(productName)
 
+			if(!isAvailable) {/*재입력 받기*/}
+			var productInfo = inventoryManager.searchNormalProduct(productName)
+			var promotionInfo = inventoryManager.searchPromotionProduct(productName)
+
+			if (productInfo[0][ProductsColumn.QUANTITY]?.toInt()!! + promotionInfo[0][ProductsColumn.QUANTITY]?.toInt()!!< buyAmount ) {/*재고수량 초과, 재입력*/}
+			var result = promotionManager.applyPromotionPrice(productName, buyAmount)
+
+			var normalPrice = productInfo[0][ProductsColumn.PRICE]?.toInt()!! * buyAmount
+			normalPrice -= result.appliedPrice
+		}
 	}
 }
 
 fun main() {
 	// TODO: 프로그램 구현
-
+	ConvenienceStore().execute()
 }
