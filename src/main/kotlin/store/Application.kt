@@ -23,6 +23,16 @@ data class ReceiptData(
 	val totalAmount:Map<String,String>
 )
 
+class ErrorMessage {
+	companion object {
+		const val NOT_VALID_FORM = "[ERROR] 올바르지 않은 형식으로 입력했습니다. 다시 입력해 주세요."
+		const val PRODUCT_NOT_FOUND = "[ERROR] 존재하지 않는 상품입니다. 다시 입력해 주세요."
+		const val NOT_VALID_STOCK = "[ERROR] 재고 수량을 초과하여 구매할 수 없습니다. 다시 입력해 주세요."
+	}
+}
+
+
+
 class InventoryManager(var inventory:MutableList<MutableMap<ProductsColumn, String>> = mutableListOf(mutableMapOf())) {
 	init {
 		checkInventoryType()
@@ -278,14 +288,10 @@ class PromotionManager (var promotion:MutableList<MutableMap<PromotionsColumn, S
 		var assigned = assignBuyAmount(buyAmount, promoInfo.Buy, promoInfo.Get, promoInfo.Stock)
 
 		if (currentProductPromotion.isEmpty()) return ApplyResult(false, 0, 0)
-		if (assigned[1] > assigned[2]) {
-			/*정가로 안내 및 책정 */
-			return notifyPromotionNotApplied(productName, promoInfo, assigned[1],  assigned[2])
-		}
-		if (buyAmount % (promoInfo.Buy+promoInfo.Get) != 0) {
-			//프로모션 존재 안내 및 적용
-			return notifyExistPromotion(productName, buyAmount, promoInfo, assigned[1], assigned[2])
-		}
+		/*정가로 안내 및 책정 */
+		if (assigned[1] > assigned[2]) return notifyPromotionNotApplied(productName, promoInfo, assigned[1],  assigned[2])
+		//프로모션 존재 안내 및 적용
+		if (buyAmount % (promoInfo.Buy+promoInfo.Get) != 0) return notifyExistPromotion(productName, buyAmount, promoInfo, assigned[1], assigned[2])
 		return ApplyResult(true, promoInfo.Price* assigned[2],  assigned[2])
 	}
 
@@ -322,7 +328,7 @@ class MemberShip {
 
 class Receipt (private val receiptData:ReceiptData) {
 	var receipt:String = ""
-	fun getPurchasedHistory():String {
+	private fun getPurchasedHistory():String {
 		var data = receiptData.purchasedNormalInfo
 		var stringData = ""
 		for (i in data) {
@@ -333,7 +339,7 @@ class Receipt (private val receiptData:ReceiptData) {
 		return stringData
 	}
 
-	fun getPromotionHistory():String {
+	private fun getPromotionHistory():String {
 		var data = receiptData.purchasedPromotionInfo
 		var stringData = ""
 		for (i in data) {
@@ -343,7 +349,7 @@ class Receipt (private val receiptData:ReceiptData) {
 		return stringData
 	}
 
-	fun getTotal():String {
+	private fun getTotal():String {
 		var data = receiptData.totalAmount
 		var totalCount = receiptData.purchasedNormalInfo.sumOf {
 			it["수량"]?.toInt()!!
@@ -355,7 +361,7 @@ class Receipt (private val receiptData:ReceiptData) {
 		stringData += "내실돈\t\t\t    ${data["내실돈"]}\n"
 		return stringData
 	}
-	fun print() {
+	fun createReceipt() {
 		receipt += "==============W 편의점================\n"
 		receipt += "상품명\t\t수량\t금액\n"
 		receipt += getPurchasedHistory()
@@ -369,36 +375,41 @@ class Receipt (private val receiptData:ReceiptData) {
 class InputView {
 	companion object {
 		fun readItem():List<List<String>> {
-			println("구매하실 상품명과 수량을 입력해 주세요. (예: [사이다-2],[감자칩-1])")
+			OutputView.printReadItem()
 			val input = camp.nextstep.edu.missionutils.Console.readLine()
 			var products = input.split(",")
 			products = products.map {
 				it.replace("[", "").replace("]", "")
 			}
-			return products.map { it.split("-")}
+			var productTable = products.map { it.split("-")}
+			productTable.forEach { if(it.size != 2) throw IllegalArgumentException(ErrorMessage.NOT_VALID_FORM)}
+			return productTable
 		}
 		fun askBuyPromotionProduct(productName: String, promotionAmount:Int):String {
-			println("현재 ${productName}은(는) ${promotionAmount}개를 무료로 더 받을 수 있습니다. 추가하시겠습니까? (Y/N)")
+			OutputView.printAskBuyPromotionProduct(productName, promotionAmount)
 			val input = camp.nextstep.edu.missionutils.Console.readLine()
+			if (input != "Y" && input != "N" ) throw IllegalArgumentException(ErrorMessage.NOT_VALID_FORM)
 			return input
 		}
 		fun askBuyWithNoPromotion(productName: String, amount:Int):String {
-			println("현재 ${productName} ${amount}개는 프로모션 할인이 적용되지 않습니다. 그래도 구매하시겠습니까? (Y/N)")
+			OutputView.printAskBuyWithNoPromotion(productName,amount)
 			val input = camp.nextstep.edu.missionutils.Console.readLine()
+			if (input != "Y" && input != "N" ) throw IllegalArgumentException(ErrorMessage.NOT_VALID_FORM)
 			return input
 		}
 		fun askGetMembershipDiscount():String {
-			println("멤버십 할인을 받으시겠습니까? (Y/N)")
+			OutputView.printAskGetMembershipDiscount()
 			val input = camp.nextstep.edu.missionutils.Console.readLine()
+			if (input != "Y" && input != "N" ) throw IllegalArgumentException(ErrorMessage.NOT_VALID_FORM)
 			return input
 		}
 		fun askMoreProducts():String {
-			println("감사합니다. 구매하고 싶은 다른 상품이 있나요? (Y/N)")
+			OutputView.printAskMoreProducts()
 			val input = camp.nextstep.edu.missionutils.Console.readLine()
+			if (input != "Y" && input != "N" ) throw IllegalArgumentException(ErrorMessage.NOT_VALID_FORM)
 			return input
 		}
 	}
-
 }
 
 class OutputView {
@@ -410,8 +421,26 @@ class OutputView {
 			println("안녕하세요. W편의점입니다.\n" +
 							"현재 보유하고 있는 상품입니다.")
 		}
+		fun printReadItem() {
+			println("구매하실 상품명과 수량을 입력해 주세요. (예: [사이다-2],[감자칩-1])")
+		}
+		fun printAskBuyPromotionProduct(productName:String, promotionAmount:Int) {
+			println("현재 ${productName}은(는) ${promotionAmount}개를 무료로 더 받을 수 있습니다. 추가하시겠습니까? (Y/N)")
+		}
+		fun printAskBuyWithNoPromotion(productName:String, amount:Int) {
+			println("현재 ${productName} ${amount}개는 프로모션 할인이 적용되지 않습니다. 그래도 구매하시겠습니까? (Y/N)")
+		}
+		fun printReceipt(receiptData: ReceiptData) {
+			val receipt = Receipt(receiptData).createReceipt()
+			print(receipt)
+		}
+		fun printAskGetMembershipDiscount() {
+			println("멤버십 할인을 받으시겠습니까? (Y/N)")
+		}
+		fun printAskMoreProducts() {
+			println("감사합니다. 구매하고 싶은 다른 상품이 있나요? (Y/N)")
+		}
 	}
-
 }
 
 class ConvenienceStore {
@@ -427,7 +456,7 @@ class ConvenienceStore {
 		promotionManager = PromotionManager(promotion, inventoryManager)
 	}
 
-	fun loadInventory():MutableList<MutableMap<ProductsColumn, String>> {
+	private fun loadInventory():MutableList<MutableMap<ProductsColumn, String>> {
 		var rawData = Files.lines(Paths.get(InventoryManager.PRODUCTS_DIR)).toList()
 		return rawData.map {
 			var split = it.split(",")
@@ -439,7 +468,7 @@ class ConvenienceStore {
 			)
 		}.toMutableList().subList(1, rawData.size)
 	}
-	fun loadPromotion():MutableList<MutableMap<PromotionsColumn, String>>  {
+	private fun loadPromotion():MutableList<MutableMap<PromotionsColumn, String>>  {
 		var rawData = Files.lines(Paths.get(InventoryManager.PROMOTION_DIR)).toList()
 		return rawData.map {
 			var split = it.split(",")
@@ -471,7 +500,14 @@ class ConvenienceStore {
 
 			var normalPrice = productInfo[0][ProductsColumn.PRICE]?.toInt()!! * buyAmount
 			normalPrice -= result.appliedPrice
+			buyAmount += result.amountDifference
+
 		}
+		//멤버쉽 할인
+		//ReceiptData내용 추가
+		//영수증 출력
+		//재고차감 및 인벤토리 업데이트
+		//재구매 여부 질문
 	}
 }
 

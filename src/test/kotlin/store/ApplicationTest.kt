@@ -439,7 +439,7 @@ class ReceiptTest {
             )
         )
         var receipt = Receipt(data)
-        receipt.print()
+        receipt.createReceipt()
         assertThat(receipt.receipt).isEqualTo("")
     }
 }
