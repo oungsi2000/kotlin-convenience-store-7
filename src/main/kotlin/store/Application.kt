@@ -476,6 +476,7 @@ class ConvenienceStore {
 	var promotion:MutableList<MutableMap<PromotionsColumn, String>>
 	var inventoryManager:InventoryManager
 	var promotionManager:PromotionManager
+	var receiptData = ReceiptData(mutableListOf(), mutableListOf(), mutableMapOf())
 
 	init {
 		inventory = loadInventory()
@@ -509,44 +510,43 @@ class ConvenienceStore {
 			)
 		}.toMutableList().subList(1, rawData.size)
 	}
+	private fun checkAvailableToProceed(productInfo: List<Map<ProductsColumn, String>>, productName: String, buyAmount: Int) {
+		if (productInfo.isEmpty()) {throw IllegalArgumentException(ErrorMessage.PRODUCT_NOT_FOUND)}
+		var isAvailable = inventoryManager.checkProductAvailable(productName, buyAmount) //재고 수량 또한 입력을 받아서 가능한지 여부
+		if(!isAvailable) {throw IllegalArgumentException(ErrorMessage.NOT_VALID_STOCK)}
+	}
+	private fun addReceipt(productName: String, buyAmount:Int,normalPrice:Int, result:PromotionManager.ApplyResult) {
+		receiptData.purchasedNormalInfo.add(mutableMapOf(
+			"상품명" to productName,
+			"수량" to buyAmount.toString(),
+			"금액" to normalPrice.toString()
+		))
+		receiptData.purchasedPromotionInfo.add(mutableMapOf(
+			"상품명" to productName,
+			"수량" to result.freeGetAmount.toString(),
+			"금액" to result.appliedPrice.toString()
+		))
+	}
+	private fun updateStock(productName: String, buyAmount: Int, result: PromotionManager.ApplyResult) {
+		inventoryManager.updateNormalProduct(productName, buyAmount.toString())
+		inventoryManager.updatePromotionProduct(productName, result.freeGetAmount.toString())
+	}
+	private fun getData(it:List<String>) {
+		var productName = it[0].trim()
+		var buyAmount = it[1].toInt()
+		var productInfo = inventoryManager.searchNormalProduct(productName)
 
-	fun execute() {
-		OutputView.printWelcome()
-		OutputView.printProducts(inventoryManager.inventoryToUserView())
-		var inputs = InputView.readItem()
-		var receiptData = ReceiptData(mutableListOf(), mutableListOf(), mutableMapOf())
+		checkAvailableToProceed(productInfo, productName, buyAmount)
 
-		for (it in inputs)	{
-			var productName = it[0].trim()
-			var buyAmount = it[1].toInt()
+		var normalPrice = productInfo[0][ProductsColumn.PRICE]?.toInt()!! * buyAmount
+		var result = promotionManager.applyPromotionPrice(productName, buyAmount)
+		buyAmount += result.amountDifference
 
-			var productInfo = inventoryManager.searchNormalProduct(productName)
-			var promotionInfo = inventoryManager.searchPromotionProduct(productName)
-			if (productInfo.isEmpty()) {throw IllegalArgumentException(ErrorMessage.PRODUCT_NOT_FOUND)}
+		addReceipt(productName, buyAmount, normalPrice, result)
+		updateStock(productName, buyAmount, result)
+	}
 
-			var isAvailable = inventoryManager.checkProductAvailable(productName, buyAmount) //재고 수량 또한 입력을 받아서 가능한지 여부
-			if(!isAvailable) {throw IllegalArgumentException(ErrorMessage.NOT_VALID_STOCK)}
-
-			var normalPrice = productInfo[0][ProductsColumn.PRICE]?.toInt()!! * buyAmount
-			var result = promotionManager.applyPromotionPrice(productName, buyAmount)
-			buyAmount += result.amountDifference
-
-			receiptData.purchasedNormalInfo.add(mutableMapOf(
-				"상품명" to productName,
-				"수량" to buyAmount.toString(),
-				"금액" to normalPrice.toString()
-			))
-			receiptData.purchasedPromotionInfo.add(mutableMapOf(
-				"상품명" to productName,
-				"수량" to result.freeGetAmount.toString(),
-				"금액" to result.appliedPrice.toString()
-			))
-			//재고차감 및 인벤토리 업데이트
-			inventoryManager.updateNormalProduct(productName, buyAmount.toString())
-			inventoryManager.updatePromotionProduct(productName, result.freeGetAmount.toString())
-		}
-
-		//멤버쉽 할인
+	private fun calculateTotalAmount() {
 		var totalPrice = receiptData.purchasedNormalInfo.sumOf { it["금액"]?.toInt()!! }
 		var membershipDiscountPrice = 0
 		if (InputView.askGetMembershipDiscount() == "Y") {
@@ -556,11 +556,20 @@ class ConvenienceStore {
 		var totalToPayPrice = totalPrice - totalPromotionPrice - membershipDiscountPrice
 		//ReceiptData내용 추가
 		receiptData.totalAmount = mutableMapOf(
-			"총구매액" to totalPrice.toString(),
-			"행사할인" to totalPromotionPrice.toString(),
-			"멤버십할인" to membershipDiscountPrice.toString(),
-			"내실돈" to totalToPayPrice.toString()
+			"총구매액" to String.format("%,d", totalPrice),
+			"행사할인" to String.format("%,d", totalPromotionPrice),
+			"멤버십할인" to String.format("%,d", membershipDiscountPrice),
+			"내실돈" to String.format("%,d", totalToPayPrice)
 		)
+	}
+	fun execute() {
+		OutputView.printWelcome()
+		OutputView.printProducts(inventoryManager.inventoryToUserView())
+		var inputs = InputView.readItem()
+		//재고차감 및 인벤토리 업데이트
+		for (it in inputs) getData(it)
+
+		calculateTotalAmount()
 		//영수증 출력
 		OutputView.printReceipt(receiptData)
 		//재구매 여부 질문

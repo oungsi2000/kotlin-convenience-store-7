@@ -7,6 +7,7 @@ import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertDoesNotThrow
+import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 import java.io.ByteArrayInputStream
@@ -60,8 +61,10 @@ class ApplicationTest : NsTest() {
     @Test
     fun `예외 테스트`() {
         assertSimpleTest {
-            runException("[컵라면-12]", "N", "N")
-            assertThat(output()).contains("[ERROR] 재고 수량을 초과하여 구매할 수 없습니다. 다시 입력해 주세요.")
+            assertThatThrownBy{
+                runException("[컵라면-12]", "N", "N")
+            }.isInstanceOf(IllegalArgumentException::class.java)
+                .hasMessageContaining("[ERROR] 재고 수량을 초과하여 구매할 수 없습니다. 다시 입력해 주세요.")
         }
     }
 
@@ -416,12 +419,12 @@ class ReceiptTest {
                 mapOf(
                     "상품명" to "콜라",
                     "수량" to "3",
-                    "금액" to "3000"
+                    "금액" to "3,000"
                 ),
                 mapOf(
                     "상품명" to "라면",
                     "수량" to "1",
-                    "금액" to "1500"
+                    "금액" to "1,500"
                 )
             ),
             mutableListOf(
@@ -432,15 +435,27 @@ class ReceiptTest {
                 ),
             ),
             mapOf(
-                "총구매액" to "4500",
-                "행사할인" to "-1000",
+                "총구매액" to "4,500",
+                "행사할인" to "-1,000",
                 "멤버십할인" to "0",
-                "내실돈" to "3500"
+                "내실돈" to "3,500"
             )
         )
         var receipt = Receipt(data)
         receipt.createReceipt()
-        assertThat(receipt.receipt).isEqualTo("")
+        assertThat(receipt.receipt).contains("""
+            ==============W 편의점================
+            상품명		수량	금액
+            콜라		3 	3,000
+            라면 		1 	1,500
+            =============증	정===============
+            콜라		1
+            ====================================
+            총구매액		4	4,500
+            행사할인			-1,000
+            멤버십할인			-0
+            내실돈			    3,500
+        """.trimIndent())
     }
 }
 
