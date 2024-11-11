@@ -105,9 +105,10 @@ class InventoryManager(var inventory:MutableList<MutableMap<ProductsColumn, Stri
 
 			inventoryUserView += "- "
 			inventoryUserView += (texts[0] + " ")
-			inventoryUserView += (texts[1]+"원 ")
-			inventoryUserView += (texts[2]+"개 ")
-			if (texts[3] != "null") inventoryUserView += (texts[3])
+			inventoryUserView += (String.format("%,d", texts[1].toInt())+"원 ")
+			if (texts[2] != "0") inventoryUserView += (texts[2]+"개 ")
+			if (texts[2] == "0") inventoryUserView += ("재고 없음 ")
+			if (texts[3] != "null") inventoryUserView += texts[3]
 			inventoryUserView += "\n"
 
 		}
@@ -368,6 +369,7 @@ class Receipt (private val receiptData:ReceiptData) {
 		var data = receiptData.purchasedPromotionInfo
 		var stringData = ""
 		for (i in data) {
+			if (i["수량"]?.toInt()!! == 0) continue
 			stringData += i["상품명"] +"\t\t"
 			stringData += i["수량"] +"\n"
 		}
@@ -386,7 +388,7 @@ class Receipt (private val receiptData:ReceiptData) {
 		stringData += "내실돈\t\t\t    ${data["내실돈"]}\n"
 		return stringData
 	}
-	fun createReceipt() {
+	fun createReceipt():String {
 		receipt += "==============W 편의점================\n"
 		receipt += "상품명\t\t수량\t금액\n"
 		receipt += getPurchasedHistory()
@@ -394,6 +396,7 @@ class Receipt (private val receiptData:ReceiptData) {
 		receipt += getPromotionHistory()
 		receipt += "====================================\n"
 		receipt += getTotal()
+		return receipt
 	}
 }
 
@@ -444,7 +447,7 @@ class OutputView {
 		}
 		fun printWelcome() {
 			println("안녕하세요. W편의점입니다.\n" +
-							"현재 보유하고 있는 상품입니다.")
+							"현재 보유하고 있는 상품입니다.\n")
 		}
 		fun printReadItem() {
 			println("구매하실 상품명과 수량을 입력해 주세요. (예: [사이다-2],[감자칩-1])")
@@ -541,7 +544,6 @@ class ConvenienceStore {
 			//재고차감 및 인벤토리 업데이트
 			inventoryManager.updateNormalProduct(productName, buyAmount.toString())
 			inventoryManager.updatePromotionProduct(productName, result.freeGetAmount.toString())
-			inventoryManager.dumpInventory()
 		}
 
 		//멤버쉽 할인
