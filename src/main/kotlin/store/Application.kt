@@ -79,10 +79,11 @@ class InventoryManager(var inventory:MutableList<MutableMap<ProductsColumn, Stri
 
 	fun checkProductAvailable(targetProduct:String, buyAmount: Int):Boolean {
 		var productInfo = searchNormalProduct(targetProduct)[0]
-		var promotionProductInfo = searchPromotionProduct(targetProduct)[0]
+		var promotionProductInfo = searchPromotionProduct(targetProduct)
+		var promotionStock = 0
 		var normalStock = productInfo[ProductsColumn.QUANTITY]?.toInt()!!
-		var promotionStock = promotionProductInfo[ProductsColumn.QUANTITY]?.toInt()!!
 
+		if(promotionProductInfo.isNotEmpty()) promotionStock = promotionProductInfo[0][ProductsColumn.QUANTITY]?.toInt()!!
 		if(normalStock + promotionStock < buyAmount) return false
 		if(normalStock <= 0) return false
 		return true
@@ -513,15 +514,15 @@ class ConvenienceStore {
 		var receiptData = ReceiptData(mutableListOf(), mutableListOf(), mutableMapOf())
 
 		for (it in inputs)	{
-			var productName = it[0]
+			var productName = it[0].trim()
 			var buyAmount = it[1].toInt()
 
 			var productInfo = inventoryManager.searchNormalProduct(productName)
 			var promotionInfo = inventoryManager.searchPromotionProduct(productName)
-			if (productInfo.isEmpty()) {}
+			if (productInfo.isEmpty()) {throw IllegalArgumentException(ErrorMessage.PRODUCT_NOT_FOUND)}
 
 			var isAvailable = inventoryManager.checkProductAvailable(productName, buyAmount) //재고 수량 또한 입력을 받아서 가능한지 여부
-			if(!isAvailable) {/*재입력 받기*/}
+			if(!isAvailable) {throw IllegalArgumentException(ErrorMessage.NOT_VALID_STOCK)}
 
 			var normalPrice = productInfo[0][ProductsColumn.PRICE]?.toInt()!! * buyAmount
 			var result = promotionManager.applyPromotionPrice(productName, buyAmount)
