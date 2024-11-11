@@ -412,7 +412,7 @@ class ReceiptTest {
     @Test
     fun `영수증은 고객의 구매 내역과 할인을 요약하여 출력한다`() {
         var data = ReceiptData(
-            listOf(
+            mutableListOf(
                 mapOf(
                     "상품명" to "콜라",
                     "수량" to "3",
@@ -424,7 +424,7 @@ class ReceiptTest {
                     "금액" to "1500"
                 )
             ),
-            listOf(
+            mutableListOf(
                 mapOf(
                     "상품명" to "콜라",
                     "수량" to "1",

@@ -18,9 +18,9 @@ enum class PromotionsColumn {
 }
 
 data class ReceiptData(
-	val purchasedNormalInfo:List<Map<String,String>>,
-	val purchasedPromotionInfo:List<Map<String,String>>,
-	val totalAmount:Map<String,String>
+	var purchasedNormalInfo:MutableList<Map<String,String>>,
+	var purchasedPromotionInfo:MutableList<Map<String,String>>,
+	var totalAmount:Map<String,String>
 )
 
 class ErrorMessage {
@@ -316,8 +316,8 @@ class PromotionManager (var promotion:MutableList<MutableMap<PromotionsColumn, S
 class MemberShip {
 	companion object {
 		const val MEMBERSHIP_DISCOUNT_RATE = 0.3
-		fun membershipDiscount(buyAmount: Int):Int {
-			var discount =  (buyAmount*MEMBERSHIP_DISCOUNT_RATE).toInt()
+		fun membershipDiscount(buyPrice: Int):Int {
+			var discount =  (buyPrice*MEMBERSHIP_DISCOUNT_RATE).toInt()
 			if (discount > 8000) return 8000
 			return discount
 		}
@@ -484,6 +484,7 @@ class ConvenienceStore {
 		OutputView.printWelcome()
 		OutputView.printProducts(inventoryManager.inventoryToCSV())
 		var inputs = InputView.readItem()
+		var receiptData = ReceiptData(mutableListOf(), mutableListOf(), mutableMapOf())
 
 		for (it in inputs)	{
 			var productName = it[0]
@@ -496,19 +497,45 @@ class ConvenienceStore {
 			var isAvailable = inventoryManager.checkProductAvailable(productName, buyAmount) //재고 수량 또한 입력을 받아서 가능한지 여부
 			if(!isAvailable) {/*재입력 받기*/}
 
-			if (productInfo[0][ProductsColumn.QUANTITY]?.toInt()!! + promotionInfo[0][ProductsColumn.QUANTITY]?.toInt()!!< buyAmount ) {/*재고수량 초과, 재입력*/}
-			var result = promotionManager.applyPromotionPrice(productName, buyAmount)
-
 			var normalPrice = productInfo[0][ProductsColumn.PRICE]?.toInt()!! * buyAmount
-			normalPrice -= result.appliedPrice
+			var result = promotionManager.applyPromotionPrice(productName, buyAmount)
 			buyAmount += result.amountDifference
 
+			receiptData.purchasedNormalInfo.add(mutableMapOf(
+				"상품명" to productName,
+				"수량" to buyAmount.toString(),
+				"금액" to normalPrice.toString()
+			))
+			receiptData.purchasedPromotionInfo.add(mutableMapOf(
+				"상품명" to productName,
+				"수량" to result.freeGetAmount.toString(),
+				"금액" to result.appliedPrice.toString()
+			))
+			//재고차감 및 인벤토리 업데이트
+			inventoryManager.updateNormalProduct(productName, buyAmount.toString())
+			inventoryManager.updatePromotionProduct(productName, result.freeGetAmount.toString())
+			inventoryManager.dumpInventory()
 		}
+
 		//멤버쉽 할인
+		var totalPrice = receiptData.purchasedNormalInfo.sumOf { it["금액"]?.toInt()!! }
+		var membershipDiscountPrice = 0
+		if (InputView.askGetMembershipDiscount() == "Y") {
+			membershipDiscountPrice = MemberShip.membershipDiscount(totalPrice)
+		}
+		var totalPromotionPrice = receiptData.purchasedPromotionInfo.sumOf { it["금액"]?.toInt()!! }
+		var totalToPayPrice = totalPrice - totalPromotionPrice - membershipDiscountPrice
 		//ReceiptData내용 추가
+		receiptData.totalAmount = mutableMapOf(
+			"총구매액" to totalPrice.toString(),
+			"행사할인" to totalPromotionPrice.toString(),
+			"멤버십할인" to membershipDiscountPrice.toString(),
+			"내실돈" to totalToPayPrice.toString()
+		)
 		//영수증 출력
-		//재고차감 및 인벤토리 업데이트
+		OutputView.printReceipt(receiptData)
 		//재구매 여부 질문
+		if (InputView.askMoreProducts() == "Y") execute()
 	}
 }
 
