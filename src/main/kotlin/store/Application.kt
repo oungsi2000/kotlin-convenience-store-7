@@ -63,8 +63,17 @@ class InventoryManager(var inventory:MutableList<MutableMap<ProductsColumn, Stri
 
 			if (normalProduct.size > 1) { throw IllegalArgumentException(Msg.DUPLEX_NAME.msg) }
 			if (promotionProduct.size > 1) { throw IllegalArgumentException(Msg.MULTIPLE_PROMOTION.msg) }
-			if (normalProduct.isEmpty()) { throw IllegalArgumentException(Msg.NO_NORMAL_PRODUCT.msg) }
+			if (normalProduct.isEmpty()) { makeNormalProduct(promotionProduct)}
 		}
+	}
+
+	private fun makeNormalProduct(promotionProduct:List<MutableMap<ProductsColumn, String>>) {
+		inventory.add(mutableMapOf(
+			ProductsColumn.NAME to promotionProduct[0][ProductsColumn.NAME]!!,
+			ProductsColumn.PROMOTION to "null",
+			ProductsColumn.QUANTITY to "0",
+			ProductsColumn.PRICE to promotionProduct[0][ProductsColumn.PRICE]!!
+		))
 	}
 
 	fun checkProductAvailable(targetProduct:String, buyAmount: Int):Boolean {
