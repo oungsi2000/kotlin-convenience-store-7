@@ -1,6 +1,7 @@
 package store
 
 import org.assertj.core.internal.DeepDifference.Difference
+import org.junit.jupiter.params.shadow.com.univocity.parsers.csv.Csv
 import java.nio.file.Paths
 import java.nio.file.Files
 import java.time.LocalDate
@@ -70,9 +71,9 @@ class InventoryManager(var inventory:MutableList<MutableMap<ProductsColumn, Stri
 	private fun makeNormalProduct(promotionProduct:List<MutableMap<ProductsColumn, String>>) {
 		inventory.add(mutableMapOf(
 			ProductsColumn.NAME to promotionProduct[0][ProductsColumn.NAME]!!,
-			ProductsColumn.PROMOTION to "null",
+			ProductsColumn.PRICE to promotionProduct[0][ProductsColumn.PRICE]!!,
 			ProductsColumn.QUANTITY to "0",
-			ProductsColumn.PRICE to promotionProduct[0][ProductsColumn.PRICE]!!
+			ProductsColumn.PROMOTION to "null",
 		))
 	}
 
@@ -94,6 +95,22 @@ class InventoryManager(var inventory:MutableList<MutableMap<ProductsColumn, Stri
 			inventoryCSV += text
 		}
 		return inventoryCSV
+	}
+
+	fun inventoryToUserView():String {
+		var inventoryUserView = ""
+		for (productInfo in inventory) {
+			var texts = productInfo.values.toList()
+
+			inventoryUserView += "- "
+			inventoryUserView += (texts[0] + " ")
+			inventoryUserView += (texts[1]+"원 ")
+			inventoryUserView += (texts[2]+"개 ")
+			if (texts[3] != "null") inventoryUserView += (texts[3])
+			inventoryUserView += "\n"
+
+		}
+		return inventoryUserView
 	}
 
 	//파일 입출력을 이용하여 inventory 변수의 내용을 덮어씌웁니다
@@ -421,8 +438,8 @@ class InputView {
 
 class OutputView {
 	companion object {
-		fun printProducts(inventoryCSV:String) {
-			println(inventoryCSV)
+		fun printProducts(inventoryUserView:String) {
+			println(inventoryUserView)
 		}
 		fun printWelcome() {
 			println("안녕하세요. W편의점입니다.\n" +
@@ -491,7 +508,7 @@ class ConvenienceStore {
 
 	fun execute() {
 		OutputView.printWelcome()
-		OutputView.printProducts(inventoryManager.inventoryToCSV())
+		OutputView.printProducts(inventoryManager.inventoryToUserView())
 		var inputs = InputView.readItem()
 		var receiptData = ReceiptData(mutableListOf(), mutableListOf(), mutableMapOf())
 
